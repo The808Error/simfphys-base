@@ -11,8 +11,7 @@ function ENT:WheelOnGround()
 	self.RearWheelPowered = self:GetPowerDistribution() ~= -1
 
 	local wheels = self.Wheels
-	for i = 1, #wheels do
-		local wheel = wheels[i]
+	for i, wheel in ipairs( wheels ) do
 
 		if not IsValid( wheel ) then continue end
 
@@ -66,7 +65,7 @@ function ENT:SimulateAirControls( tilt_forward, tilt_back, tilt_left, tilt_right
 	local tiltRoll = ( self.Right * ( tilt_right - tilt_left ) * 1.8 )
 	local tiltPitch = ( self.Forward * ( tilt_forward - tilt_back ) * 6 )
 
-	local tiltForce = ( tiltRoll + tiltPitch ) * math.acos( math.Clamp( self.Up:Dot( VECTOR_UP ) , -1, 1 ) ) * ( 180 / math.pi ) * self.Mass
+	local tiltForce = ( tiltRoll + tiltPitch ) * math.acos( mathClamp( self.Up:Dot( VECTOR_UP ) , -1, 1 ) ) * ( 180 / math.pi ) * self.Mass
 
 	phys:ApplyForceOffset( tiltForce, massCenter + self.Up )
 	phys:ApplyForceOffset( -tiltForce, massCenter - self.Up )
@@ -105,12 +104,17 @@ function ENT:SimulateEngine( IdleRPM, LimitRPM, Powerbandstart, Powerbandend, cu
 	end
 
 	-- TODO: Split these lines up.
-	local engineRPM = selfTbl.EngineRPM
-	if selfTbl.EngineIsOn then
-		engineRPM = mathClamp( engineRPM + mathClamp( DesRPM - engineRPM, -mathMax( engineRPM / 15, 1 ), mathMax( -selfTbl.RpmDiff / 1.5 * InvClutch + ( selfTbl.Torque * 5 ) / 0.15 * selfTbl.Clutch, 1 ) ) + selfTbl.RPM_DIFFERENCE * Throttle, 0, LimitRPM )
-	else
-		engineRPM = 0
-	end
+    local engineRPM = selfTbl.EngineRPM
+    if selfTbl.EngineIsOn then
+        local amin,amax = -mathMax( engineRPM / 15, 1 ), mathMax( -selfTbl.RpmDiff / 1.5 * InvClutch + ( selfTbl.Torque * 5 ) / 0.15 * selfTbl.Clutch, 1 )
+        local a = mathClamp( DesRPM - engineRPM, amin, amax )
+
+        local cur = engineRPM + a + selfTbl.RPM_DIFFERENCE * Throttle
+
+        engineRPM = mathClamp( cur, 0, LimitRPM )
+    else
+        engineRPM = 0
+    end
 
 	selfTbl.EngineRPM = engineRPM
 
@@ -360,8 +364,7 @@ function ENT:SimulateWheels( k_clutch, LimitRPM )
 	local steerMaster2 = selfTbl.SteerMaster2
 	local steerMaster2Valid = IsValid( steerMaster2 )
 
-	for i = 1, #selfTbl.Wheels do
-		local wheel = selfTbl.Wheels[i]
+	for i, wheel in ipairs( selfTbl.Wheels ) do
 		if not IsValid( wheel ) then continue end
 
 		local phys = wheel:GetPhysicsObject()
@@ -412,7 +415,7 @@ function ENT:SimulateWheels( k_clutch, LimitRPM )
 
 		local GripLoss = mathMax( TractionCycle - MaxTraction, 0 )
 		local GripRemaining = mathMax( MaxTraction - GripLoss, mathMin( absFy / 25, MaxTraction ) )
-		--local GripRemaining = math.max(MaxTraction - GripLoss,math.min(absFy / 25,MaxTraction / 2))
+		--local GripRemaining = mathMax(MaxTraction - GripLoss,mathMin(absFy / 25,MaxTraction / 2))
 
 		local signForwardForce = ( ( ForwardForce > 0 ) and 1 or 0 ) + ( ( ForwardForce < 0 ) and -1 or 0 )
 		local signEngineTorque = ( ( selfTbl.EngineTorque > 0 ) and 1 or 0 ) + ( ( selfTbl.EngineTorque < 0 ) and -1 or 0 )
@@ -428,14 +431,14 @@ function ENT:SimulateWheels( k_clutch, LimitRPM )
 		wheel.skid = ((MaxTraction - (MaxTraction - Vector(absFy,math.abs(ForwardForce * 10),0):Length())) / MaxTraction) - 10
 
 		local RPM = (absFx / (3.14 * WheelDiameter)) * 52 * OnGround
-		local GripLossFaktor = math.Clamp(GripLoss,0,MaxTraction) / MaxTraction
+		local GripLossFaktor = mathClamp(GripLoss,0,MaxTraction) / MaxTraction
 
 		selfTbl.VehicleData[ "WheelRPM_".. i ] = RPM
 		selfTbl.VehicleData[ "GripLossFaktor_".. i ] = GripLossFaktor
 		selfTbl.VehicleData[ "Exp_GLF_".. i ] = GripLossFaktor ^ 2
 		wheel:SetGripLoss( GripLossFaktor )
 
-		local WheelOPow = math.abs( selfTbl.CurrentGear == 1 and math.min( TorqueConv, 0 ) or math.max( TorqueConv, 0 ) ) > 0
+		local WheelOPow = math.abs( selfTbl.CurrentGear == 1 and mathMin( TorqueConv, 0 ) or mathMax( TorqueConv, 0 ) ) > 0
 		local FrontWheelCanTurn = (WheelOPow and 0 or selfTbl.Brake) < MaxTraction * 1.75
 		local RearWheelCanTurn = (selfTbl.HandBrake < MaxTraction) and (WheelOPow and 0 or selfTbl.Brake) < MaxTraction * 2
 
@@ -519,15 +522,15 @@ function ENT:SimulateBlower(LimitRPM)
 
 	local Throttle = self:GetThrottle()
 
-	self.SmoothBlower = self.SmoothBlower + math.Clamp(math.min(self.EngineRPM / LimitRPM,1) * 500 - self.SmoothBlower,-20,20)
+	self.SmoothBlower = self.SmoothBlower + mathClamp(mathMin(self.EngineRPM / LimitRPM,1) * 500 - self.SmoothBlower,-20,20)
 
-	local Volume1 = math.Clamp( self.SmoothBlower / 400 * (1 - 0.4 * Throttle) ,0, 1)
-	local Volume2 = math.Clamp( self.SmoothBlower / 400 * (0.10 + 0.4 * Throttle) ,0, 1)
+	local Volume1 = mathClamp( self.SmoothBlower / 400 * (1 - 0.4 * Throttle) ,0, 1)
+	local Volume2 = mathClamp( self.SmoothBlower / 400 * (0.10 + 0.4 * Throttle) ,0, 1)
 
-	local Pitch1 = 50 + math.Clamp( self.SmoothBlower / 4.5 , 0 , 205)
+	local Pitch1 = 50 + mathClamp( self.SmoothBlower / 4.5 , 0 , 205)
 	local Pitch2 = Pitch1 * 1.2
 
-	local boost = math.Clamp( (self.SmoothBlower / 600) ^ 4 ,0,1)
+	local boost = mathClamp( (self.SmoothBlower / 600) ^ 4 ,0,1)
 
 	self.Blower:ChangeVolume( Volume1 )
 	self.Blower:ChangePitch( Pitch1 )
